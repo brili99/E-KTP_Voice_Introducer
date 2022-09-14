@@ -1,12 +1,21 @@
 package com.brili99.e_ktpvoiceintroducer;
 
+import static android.Manifest.permission.RECORD_AUDIO;
+import static android.Manifest.permission.WRITE_EXTERNAL_STORAGE;
+import static android.Manifest.permission.READ_EXTERNAL_STORAGE;
+
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.drawable.Drawable;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
+import android.media.MediaRecorder;
 import android.nfc.NdefMessage;
 import android.nfc.NdefRecord;
 import android.nfc.NfcAdapter;
@@ -14,21 +23,36 @@ import android.nfc.Tag;
 import android.nfc.tech.IsoDep;
 import android.nfc.tech.MifareClassic;
 import android.nfc.tech.MifareUltralight;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
+import android.util.Base64;
 import android.util.Log;
+import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.android.volley.AuthFailureError;
+import com.android.volley.NetworkResponse;
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
 import com.android.volley.Response;
 import com.android.volley.VolleyError;
+import com.android.volley.VolleyLog;
+import com.android.volley.toolbox.HttpHeaderParser;
 import com.android.volley.toolbox.StringRequest;
 import com.android.volley.toolbox.Volley;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
 import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.Locale;
@@ -38,6 +62,21 @@ import cn.pedant.SweetAlert.SweetAlertDialog;
 //import cn.pedant.SweetAlert.SweetAlertDialog;
 
 public class MainActivity extends AppCompatActivity {
+    // Initializing all variables..
+    private TextView startTV, stopTV, playTV, stopplayTV, statusTV, btnModeRegis;
+
+    // creating a variable for medi recorder object class.
+    private MediaRecorder mRecorder;
+
+    // creating a variable for mediaplayer class
+    private MediaPlayer mPlayer;
+
+    // string variable is created for storing a file name
+    private static String mFileName = null;
+
+    // constant for storing audio permission
+    public static final int REQUEST_AUDIO_PERMISSION_CODE = 1;
+
     //Intialize attributes
     NfcAdapter nfcAdapter;
     PendingIntent pendingIntent;
@@ -47,10 +86,14 @@ public class MainActivity extends AppCompatActivity {
     MediaPlayer mediaPlayer;
     IsoDep isoDep;
     SweetAlertDialog pDialog;
+    Drawable imgMode;
+    File file;
     //    TextToSpeech tts;
 //    SweetAlertDialog pDialog;
     final static String TAG = "nfc_test";
 //    private String androidId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
+
+    private boolean modeRegis = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,27 +102,301 @@ public class MainActivity extends AppCompatActivity {
 
         tag_data = (TextView) findViewById(R.id.tag_data);
         web_response = (TextView) findViewById(R.id.web_response);
+        statusTV = (TextView) findViewById(R.id.idTVstatus);
+        startTV = (TextView) findViewById(R.id.btnRecord);
+        stopTV = (TextView) findViewById(R.id.btnStop);
+        playTV = (TextView) findViewById(R.id.btnPlay);
+        stopplayTV = (TextView) findViewById(R.id.btnStopPlay);
+        btnModeRegis = (TextView) findViewById(R.id.btnModeRegis);
+
+        mFileName = getFilesDir().getAbsolutePath();
+        mFileName += "/AudioRecording.3gp";
+        file = new File(mFileName);
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            stopTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary, this.getTheme()));
+            playTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary, this.getTheme()));
+            stopplayTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary, this.getTheme()));
+        } else {
+            stopTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary));
+            playTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary));
+            stopplayTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary));
+        }
+
+        startTV.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // start recording method will
+                // start the recording of audio.
+                startRecording();
+            }
+        });
+
+        stopTV.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // pause Recording method will
+                // pause the recording of audio.
+                pauseRecording();
+
+            }
+        });
+        playTV.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // play audio method will play
+                // the audio which we have recorded
+                playAudio();
+            }
+        });
+        stopplayTV.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // pause play method will
+                // pause the play of audio
+                pausePlaying();
+            }
+        });
+
+        btnModeRegis.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                switchModeRegis();
+            }
+        });
+
+
         queue = Volley.newRequestQueue(this);
         androidId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
-//        pDialog = new SweetAlertDialog(this);
-        //Initialise NfcAdapter
         nfcAdapter = NfcAdapter.getDefaultAdapter(this);
-        //If no NfcAdapter, display that the device has no NFC
+
         if (nfcAdapter == null) {
             tag_data.setText("NO NFC Capabilities");
             Toast.makeText(this, "NO NFC Capabilities",
-                    Toast.LENGTH_SHORT).show();
+                    Toast.LENGTH_LONG).show();
             finish();
         }
-//        pendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, this.getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), 0);
-//        pendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, this.getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE);
-//        pendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, this.getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_MUTABLE);
+
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             pendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, this.getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_MUTABLE);
-
         } else {
             pendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, this.getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), 0);
         }
+    }
+
+    private void switchModeRegis() {
+        if (modeRegis) {
+            modeRegis = false;
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                btnModeRegis.setBackgroundColor(getResources().getColor(R.color.bs_secondary, this.getTheme()));
+            } else {
+                btnModeRegis.setBackgroundColor(getResources().getColor(R.color.bs_secondary));
+            }
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                imgMode = this.getResources().getDrawable(R.drawable.ic_baseline_close_24, this.getTheme());
+            } else {
+                imgMode = this.getResources().getDrawable(R.drawable.ic_baseline_close_24);
+            }
+            btnModeRegis.setCompoundDrawablesWithIntrinsicBounds(imgMode, null, null, null);
+        } else {
+            if (file.exists()) {
+                modeRegis = true;
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    btnModeRegis.setBackgroundColor(getResources().getColor(R.color.bs_primary, this.getTheme()));
+                } else {
+                    btnModeRegis.setBackgroundColor(getResources().getColor(R.color.bs_primary));
+                }
+
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                    imgMode = this.getResources().getDrawable(R.drawable.ic_baseline_check_24, this.getTheme());
+                } else {
+                    imgMode = this.getResources().getDrawable(R.drawable.ic_baseline_check_24);
+                }
+                btnModeRegis.setCompoundDrawablesWithIntrinsicBounds(imgMode, null, null, null);
+            } else {
+                Toast.makeText(this, "Isi rekaman terlebih dahulu", Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
+    private void startRecording() {
+        // check permission method is used to check
+        // that the user has granted permission
+        // to record nd store the audio.
+        if (CheckPermissions()) {
+
+            // setbackgroundcolor method will change
+            // the background color of text view.
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                stopTV.setBackgroundColor(getResources().getColor(R.color.purple_200, this.getTheme()));
+                startTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary, this.getTheme()));
+                playTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary, this.getTheme()));
+                stopplayTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary, this.getTheme()));
+            } else {
+                stopTV.setBackgroundColor(getResources().getColor(R.color.purple_200));
+                startTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary));
+                playTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary));
+                stopplayTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary));
+            }
+
+            // we are here initializing our filename variable
+            // with the path of the recorded audio file.
+            Log.e("mFileName", mFileName);
+
+            // below method is used to initialize
+            // the media recorder class
+            mRecorder = new MediaRecorder();
+
+            // below method is used to set the audio
+            // source which we are using a mic.
+            mRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+
+            // below method is used to set
+            // the output format of the audio.
+            mRecorder.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
+
+            // below method is used to set the
+            // audio encoder for our recorded audio.
+            mRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);
+
+            // below method is used to set the
+            // output file location for our recorded audio
+            mRecorder.setOutputFile(mFileName);
+            try {
+                // below method will prepare
+                // our audio recorder class
+                mRecorder.prepare();
+            } catch (IOException e) {
+                Log.e("TAG", "prepare() failed");
+            }
+            // start method will start
+            // the audio recording.
+            mRecorder.start();
+            statusTV.setText("Recording Started");
+        } else {
+            // if audio recording permissions are
+            // not granted by user below method will
+            // ask for runtime permission for mic and storage.
+            RequestPermissions();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        // this method is called when user will
+        // grant the permission for audio recording.
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        switch (requestCode) {
+            case REQUEST_AUDIO_PERMISSION_CODE:
+                if (grantResults.length > 0) {
+                    boolean permissionToRecord = grantResults[0] == PackageManager.PERMISSION_GRANTED;
+                    boolean permissionToStore = grantResults[1] == PackageManager.PERMISSION_GRANTED;
+                    boolean permissionToRead = grantResults[2] == PackageManager.PERMISSION_GRANTED;
+                    if (permissionToRecord && permissionToStore && permissionToRead) {
+//                        Toast.makeText(getApplicationContext(), "Permission Granted", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, "Permission Granted", Toast.LENGTH_SHORT).show();
+                    } else {
+//                        Toast.makeText(getApplicationContext(), "Permission Denied", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, "Permission Denied", Toast.LENGTH_SHORT).show();
+                    }
+                }
+                break;
+        }
+    }
+
+    public boolean CheckPermissions() {
+        // this method is used to check permission
+        int result = ContextCompat.checkSelfPermission(getApplicationContext(), WRITE_EXTERNAL_STORAGE);
+        int result1 = ContextCompat.checkSelfPermission(getApplicationContext(), RECORD_AUDIO);
+        int result2 = ContextCompat.checkSelfPermission(getApplicationContext(), READ_EXTERNAL_STORAGE);
+        return result == PackageManager.PERMISSION_GRANTED && result1 == PackageManager.PERMISSION_GRANTED && result2 == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void RequestPermissions() {
+        // this method is used to request the
+        // permission for audio recording and storage.
+        ActivityCompat.requestPermissions(MainActivity.this, new String[]{
+                RECORD_AUDIO, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE
+        }, REQUEST_AUDIO_PERMISSION_CODE);
+    }
+
+
+    public void playAudio() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            stopTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary, this.getTheme()));
+            startTV.setBackgroundColor(getResources().getColor(R.color.purple_200, this.getTheme()));
+            playTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary, this.getTheme()));
+            stopplayTV.setBackgroundColor(getResources().getColor(R.color.purple_200, this.getTheme()));
+        } else {
+            stopTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary));
+            startTV.setBackgroundColor(getResources().getColor(R.color.purple_200));
+            playTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary));
+            stopplayTV.setBackgroundColor(getResources().getColor(R.color.purple_200));
+        }
+
+        // for playing our recorded audio
+        // we are using media player class.
+        mPlayer = new MediaPlayer();
+        try {
+            // below method is used to set the
+            // data source which will be our file name
+            mPlayer.setDataSource(mFileName);
+
+            // below method will prepare our media player
+            mPlayer.prepare();
+
+            // below method will start our media player.
+            mPlayer.start();
+            statusTV.setText("Recording Started Playing");
+        } catch (IOException e) {
+            Log.e("TAG", "prepare() failed");
+        }
+    }
+
+    public void pauseRecording() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            stopTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary, this.getTheme()));
+            startTV.setBackgroundColor(getResources().getColor(R.color.purple_200, this.getTheme()));
+            playTV.setBackgroundColor(getResources().getColor(R.color.purple_200, this.getTheme()));
+            stopplayTV.setBackgroundColor(getResources().getColor(R.color.purple_200, this.getTheme()));
+        } else {
+            stopTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary));
+            startTV.setBackgroundColor(getResources().getColor(R.color.purple_200));
+            playTV.setBackgroundColor(getResources().getColor(R.color.purple_200));
+            stopplayTV.setBackgroundColor(getResources().getColor(R.color.purple_200));
+        }
+
+        // below method will stop
+        // the audio recording.
+        mRecorder.stop();
+
+        // below method will release
+        // the media recorder class.
+        mRecorder.release();
+        mRecorder = null;
+        statusTV.setText("Recording Stopped");
+    }
+
+    public void pausePlaying() {
+        // this method will release the media player
+        // class and pause the playing of our recorded audio.
+        mPlayer.release();
+        mPlayer = null;
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            stopTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary, this.getTheme()));
+            startTV.setBackgroundColor(getResources().getColor(R.color.purple_200, this.getTheme()));
+            playTV.setBackgroundColor(getResources().getColor(R.color.purple_200, this.getTheme()));
+            stopplayTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary, this.getTheme()));
+        } else {
+            stopTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary));
+            startTV.setBackgroundColor(getResources().getColor(R.color.purple_200));
+            playTV.setBackgroundColor(getResources().getColor(R.color.purple_200));
+            stopplayTV.setBackgroundColor(getResources().getColor(R.color.bs_secondary));
+        }
+
+        statusTV.setText("Recording Play Stopped");
     }
 
 
@@ -113,7 +430,7 @@ public class MainActivity extends AppCompatActivity {
                 || NfcAdapter.ACTION_NDEF_DISCOVERED.equals(action)) {
             Tag tag = (Tag) intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
             assert tag != null;
-            String data = detectTagData(tag);
+            String data = detectTagData(tag).replace(" ", "");
             byte[] payload = data.getBytes();
 
 //            if (NfcAdapter.ACTION_TAG_DISCOVERED.equals(action)) {
@@ -129,14 +446,65 @@ public class MainActivity extends AppCompatActivity {
 //            pDialog.setTitleText("Loading");
 //            pDialog.setCancelable(false);
 //            pDialog.show();
-            pDialog = new SweetAlertDialog(this, SweetAlertDialog.SUCCESS_TYPE);
-            pDialog.setTitleText("ID NFC E-KTP anda")
-                    .setContentText(data)
-                    .show();
+
+            // Cek apakah id nfc valid
+            if (data.length() != 14) {
+                pDialog.dismiss();
+                pDialog = new SweetAlertDialog(this, SweetAlertDialog.ERROR_TYPE);
+                pDialog.setTitleText("E-KTP anda tidak valid")
+                        .setContentText(data)
+                        .show();
+            } else {
+                if (!modeRegis) {
+                    playAudioWeb(data);
+                    pDialog = new SweetAlertDialog(this, SweetAlertDialog.SUCCESS_TYPE);
+                    pDialog.setTitleText("ID NFC E-KTP anda")
+                            .setContentText(data)
+                            .show();
+                } else {
+                    String bs64 = fileToBase64(mFileName);
+                    String fileSize = getFileSize(mFileName);
+                    if (bs64 != "") {
+                        sendVoiceToServer(data, bs64, fileSize);
+                        pDialog = new SweetAlertDialog(this, SweetAlertDialog.PROGRESS_TYPE);
+                        pDialog.getProgressHelper().setBarColor(Color.parseColor("#A5DC86"));
+                        pDialog.setTitleText("Loading");
+                        pDialog.setCancelable(false);
+                        pDialog.show();
+                    } else {
+                        pDialog = new SweetAlertDialog(this, SweetAlertDialog.ERROR_TYPE);
+                        pDialog.setTitleText("Error")
+                                .setContentText("Ada masalah dalam konversi data")
+                                .show();
+                    }
+                }
+            }
 //            Log.d("payload", toHex(payload));
 
 //            sendToServer(data.replace("\n", "~"));
         }
+    }
+
+    private static String fileToBase64(String path) {
+        String base64 = "";
+        try {
+            File file = new File(path);
+            byte[] buffer = new byte[(int) file.length() + 100];
+            @SuppressWarnings("resource")
+            int length = new FileInputStream(file).read(buffer);
+            base64 = Base64.encodeToString(buffer, 0, length,
+                    Base64.DEFAULT);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return base64;
+    }
+
+    private String getFileSize(String path) {
+        String size = "0";
+        File file = new File(path);
+        size = Long.toString(file.length());
+        return size;
     }
 
 //    private void sendToServer(String data) {
@@ -158,7 +526,80 @@ public class MainActivity extends AppCompatActivity {
 //        queue.add(stringRequest);
 //    }
 
-    private void playAudio(String data) {
+    private void sendVoiceToServer(String id_nfc, String fileBase64, String fileSize) {
+        try {
+            RequestQueue requestQueue = Volley.newRequestQueue(this);
+            String URL = "https://alkaira.com/ektp/updateVoice.php";
+            JSONObject jsonBody = new JSONObject();
+            jsonBody.put("androidId", androidId);
+            jsonBody.put("id_nfc", id_nfc);
+            jsonBody.put("voice_size", fileSize);
+            jsonBody.put("voice", fileBase64);
+            final String requestBody = jsonBody.toString();
+
+            StringRequest stringRequest = new StringRequest(Request.Method.POST, URL, new Response.Listener<String>() {
+                @Override
+                public void onResponse(String response) {
+                    Log.i("VOLLEY", response);
+//                    web_response.setText(response);
+                    response = response.trim();
+                    if (response.equals("200")) {
+                        showSweetAlert("Sukses", "Berhasil memperbarui suara", SweetAlertDialog.SUCCESS_TYPE);
+                        switchModeRegis();
+                    } else if (response.equals("500")) {
+                        showSweetAlert("Error", "Error pada server", SweetAlertDialog.ERROR_TYPE);
+                    }
+                }
+            }, new Response.ErrorListener() {
+                @Override
+                public void onErrorResponse(VolleyError error) {
+                    Log.e("VOLLEY", error.toString());
+                    showSweetAlert("Error", error.toString(), SweetAlertDialog.ERROR_TYPE);
+                }
+            }) {
+                @Override
+                public String getBodyContentType() {
+                    return "application/json; charset=utf-8";
+                }
+
+                @Override
+                public byte[] getBody() throws AuthFailureError {
+                    try {
+                        return requestBody == null ? null : requestBody.getBytes("utf-8");
+                    } catch (UnsupportedEncodingException uee) {
+                        VolleyLog.wtf("Unsupported Encoding while trying to get the bytes of %s using %s", requestBody, "utf-8");
+                        return null;
+                    }
+                }
+
+                @Override
+                protected Response<String> parseNetworkResponse(NetworkResponse response) {
+                    String responseString = "";
+                    if (response != null) {
+                        responseString = String.valueOf(response.statusCode);
+//                        showSweetAlert("Sukses",responseString, SweetAlertDialog.SUCCESS_TYPE);
+                        // can get more details such as response.headers
+                    }
+                    return Response.success(responseString, HttpHeaderParser.parseCacheHeaders(response));
+                }
+            };
+
+            queue.add(stringRequest);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void showSweetAlert(String title, String desc, int icon) {
+        pDialog.dismiss();
+//        pDialog.dismissWithAnimation();
+        pDialog = new SweetAlertDialog(this, icon);
+        pDialog.setTitleText(title)
+                .setContentText(desc)
+                .show();
+    }
+
+    private void playAudioWeb(String data) {
         String audioUrl = "https://alkaira.com/ektp/device.php?id=" + androidId + "&data=" + data;
 
         // Stop from playing
@@ -194,7 +635,7 @@ public class MainActivity extends AppCompatActivity {
         StringBuilder sb = new StringBuilder();
         byte[] id = tag.getId();
 //        sendToServer(toHex(id).replace(" ", ""));
-        playAudio(toHex(id).replace(" ", ""));
+//        playAudioWeb(toHex(id).replace(" ", ""));
 //        sb.append("ID NFC E-KTP anda: ").append('\n').append(toHex(id).toUpperCase()).append('\n');
         sb.append(toHex(id).toUpperCase());
 //        new SweetAlertDialog(this, SweetAlertDialog.SUCCESS_TYPE)
@@ -505,4 +946,6 @@ public class MainActivity extends AppCompatActivity {
         }
         return null;
     }
+
+
 }

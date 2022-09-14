@@ -13,7 +13,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:text="Please tap your e-ktp"
+        android:text="Tempelkan e-KTP anda"
         android:textSize="34sp"
         android:textStyle="bold" />
 
@@ -23,4 +23,128 @@
         android:layout_height="wrap_content"
         android:gravity="center"
         android:text="" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="@string/registrasiTextHead"
+        android:textSize="25sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/idTVstatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="15dp"
+        android:text="@string/status"
+        android:textAlignment="center"
+        android:textSize="18sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:layout_marginTop="30dp"
+        android:orientation="horizontal"
+        android:weightSum="4">
+
+        <!--Textview to start audio recording
+            drawableTop will add above mic image-->
+        <TextView
+            android:id="@+id/btnRecord"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_margin="5dp"
+            android:layout_weight="1"
+            android:background="@color/bs_primary"
+            android:padding="5dp"
+            android:text="@string/start_recording"
+            android:textAlignment="center"
+            android:textColor="@color/white"
+            app:drawableTopCompat="@drawable/ic_baseline_mic_24" />
+
+        <!--Textview to stop audio recording
+            drawableTop will add above mic image-->
+        <TextView
+            android:id="@+id/btnStop"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_margin="5dp"
+            android:layout_weight="1"
+            android:background="@color/bs_primary"
+            android:padding="5dp"
+            android:text="@string/stop_recording"
+            android:textAlignment="center"
+            android:textColor="@color/white"
+            app:drawableTopCompat="@drawable/ic_baseline_mic_off_24" />
+
+        <!--Textview to play audio that is recorded
+            drawableTop will add above mic image-->
+        <TextView
+            android:id="@+id/btnPlay"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_margin="5dp"
+            android:layout_weight="1"
+            android:background="@color/bs_primary"
+            android:padding="5dp"
+            android:text="@string/play_recording"
+            android:textAlignment="center"
+            android:textColor="@color/white"
+            app:drawableTopCompat="@drawable/ic_baseline_play_arrow_24" />
+
+        <!--Textview to pause the play of audio recording
+            drawableTop will add above mic image-->
+        <TextView
+            android:id="@+id/btnStopPlay"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_margin="5dp"
+            android:layout_weight="1"
+            android:background="@color/bs_primary"
+            android:lines="2"
+            android:padding="5dp"
+            android:text="@string/stop_playing"
+            android:textAlignment="center"
+            android:textColor="@color/white"
+            app:drawableTopCompat="@drawable/ic_baseline_pause_24" />
+
+    </LinearLayout>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <TextView
+            android:id="@+id/btnModeRegis"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="5dp"
+            android:background="@color/bs_secondary"
+            android:lines="2"
+            android:padding="5dp"
+            android:text="Mode Registrasi Mati"
+            android:textColor="@color/white"
+            android:gravity="center_vertical"
+            app:drawableLeftCompat="@drawable/ic_baseline_close_24" />
+    </LinearLayout>
+
+<!--    <TextView-->
+<!--        android:layout_width="wrap_content"-->
+<!--        android:layout_height="wrap_content"-->
+<!--        android:padding="5dp"-->
+<!--        android:text="dummy button"/>-->
+<!--    <TextView-->
+<!--        android:layout_width="wrap_content"-->
+<!--        android:layout_height="wrap_content"-->
+<!--        android:layout_margin="5dp"-->
+<!--        android:background="@color/bs_primary"-->
+<!--        android:lines="2"-->
+<!--        android:padding="5dp"-->
+<!--        android:text="Mode Registrasi Aktif"-->
+<!--        android:textColor="@color/white"-->
+<!--        android:gravity="center_vertical"-->
+<!--        app:drawableLeftCompat="@drawable/ic_baseline_check_24" />-->
 </LinearLayout>
